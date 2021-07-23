@@ -1,0 +1,6 @@
+Person
+Car
+PotHole
+CurbStone
+Lane
+Obstacle

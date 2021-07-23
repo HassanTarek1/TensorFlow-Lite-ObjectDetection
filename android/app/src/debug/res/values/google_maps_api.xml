@@ -1,0 +1,24 @@
+<resources>
+    <!--
+    TODO: Before you run your application, you need a Google Maps API key.
+
+    To get one, follow this link, follow the directions and press "Create" at the end:
+
+    https://console.developers.google.com/flows/enableapi?apiid=maps_android_backend&keyType=CLIENT_SIDE_ANDROID&r=4D:B5:42:FE:5B:3A:D7:BE:21:4F:82:A9:48:62:D0:50:37:B2:94:06%3Borg.tensorflow.lite.examples.detection
+
+    You can also add your credentials to an existing key, using these values:
+
+    Package name:
+    org.tensorflow.lite.examples.detection
+
+    SHA-1 certificate fingerprint:
+    4D:B5:42:FE:5B:3A:D7:BE:21:4F:82:A9:48:62:D0:50:37:B2:94:06
+
+    Alternatively, follow the directions here:
+    https://developers.google.com/maps/documentation/android/start#get-key
+
+    Once you have your key (it starts with "AIza"), replace the "google_maps_key"
+    string in this file.
+    -->
+    <string name="google_maps_key" templateMergeStrategy="preserve" translatable="false">AIzaSyCw6-_78MV8EMBK5sa5hEY7YetQMY5xFA8</string>
+</resources>
