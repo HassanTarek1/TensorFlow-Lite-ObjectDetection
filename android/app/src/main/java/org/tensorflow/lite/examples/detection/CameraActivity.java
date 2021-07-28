@@ -19,12 +19,15 @@ package org.tensorflow.lite.examples.detection;
 import android.Manifest;
 import android.app.Fragment;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.location.Location;
+import android.location.LocationManager;
 import android.media.Image;
 import android.media.Image.Plane;
 import android.media.ImageReader;
@@ -33,11 +36,15 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.os.Trace;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
+
+import android.provider.Settings;
 import android.util.Size;
 import android.view.Surface;
 import android.view.View;
@@ -48,8 +55,19 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import java.nio.ByteBuffer;
+
+import org.jetbrains.annotations.NotNull;
 import org.tensorflow.lite.examples.detection.env.ImageUtils;
 import org.tensorflow.lite.examples.detection.env.Logger;
 
@@ -57,7 +75,7 @@ public abstract class CameraActivity extends AppCompatActivity
     implements OnImageAvailableListener,
         Camera.PreviewCallback,
         CompoundButton.OnCheckedChangeListener,
-        View.OnClickListener {
+        View.OnClickListener, LocationListener {
   private static final Logger LOGGER = new Logger();
 
   private static final int PERMISSIONS_REQUEST = 1;
@@ -86,6 +104,11 @@ public abstract class CameraActivity extends AppCompatActivity
   private SwitchCompat apiSwitchCompat;
   private TextView threadsTextView;
 
+  FusedLocationProviderClient fusedLocationProviderClient;
+  private double latitude;
+  private double longitude;
+
+
   @Override
   protected void onCreate(final Bundle savedInstanceState) {
     LOGGER.d("onCreate " + this);
@@ -102,6 +125,19 @@ public abstract class CameraActivity extends AppCompatActivity
     } else {
       requestPermission();
     }
+
+    fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
+    if (ActivityCompat.checkSelfPermission(CameraActivity.this, Manifest.permission.ACCESS_FINE_LOCATION)== PackageManager.PERMISSION_GRANTED
+            && ActivityCompat.checkSelfPermission(CameraActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED){
+      getCurrentLocation();
+
+    }else {
+      ActivityCompat.requestPermissions(CameraActivity.this,
+              new String[]{Manifest.permission.ACCESS_FINE_LOCATION
+                      ,Manifest.permission.ACCESS_COARSE_LOCATION}
+              , 100);
+    }
+
 
     threadsTextView = findViewById(R.id.threads);
     plusImageView = findViewById(R.id.plus);
@@ -172,6 +208,14 @@ public abstract class CameraActivity extends AppCompatActivity
   protected int[] getRgbBytes() {
     imageConverter.run();
     return rgbBytes;
+  }
+
+  public double getLatitude() {
+    return latitude;
+  }
+
+  public double getLongitude() {
+    return longitude;
   }
 
   protected int getLuminanceStride() {
@@ -348,9 +392,15 @@ public abstract class CameraActivity extends AppCompatActivity
     if (requestCode == PERMISSIONS_REQUEST) {
       if (allPermissionsGranted(grantResults)) {
         setFragment();
-      } else {
+      }
+      else {
         requestPermission();
       }
+    }
+    if ( requestCode== 100 && grantResults.length>0 && (grantResults[0]+grantResults[1] == PackageManager.PERMISSION_GRANTED)) {
+      getCurrentLocation();
+    }else{
+      Toast.makeText(getApplicationContext(), "Permission denied",Toast.LENGTH_SHORT).show();
     }
   }
 
@@ -535,6 +585,42 @@ public abstract class CameraActivity extends AppCompatActivity
   protected void showInference(String inferenceTime) {
     inferenceTimeTextView.setText(inferenceTime);
   }
+  public void getCurrentLocation() {
+    LocationManager locationManager = (LocationManager) getApplicationContext().getSystemService(LOCATION_SERVICE);
+    if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+            || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+      fusedLocationProviderClient.getLastLocation().addOnCompleteListener(new OnCompleteListener<Location>() {
+        @Override
+        public void onComplete(@NonNull @NotNull Task<Location> task) {
+          Location location = task.getResult();
+          if (location != null) {
+            latitude = location.getLatitude();
+            longitude = location.getLongitude();
+
+          } else {
+            LocationRequest locationRequest = new LocationRequest().setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
+                    .setInterval(10000)
+                    .setFastestInterval(1000)
+                    .setNumUpdates(1);
+
+            LocationCallback locationCallback = new LocationCallback() {
+              @Override
+              public void onLocationResult(@NonNull @NotNull LocationResult locationResult) {
+                Location location1 = locationResult.getLastLocation();
+                latitude = location1.getLatitude();
+                longitude = location1.getLongitude();
+              }
+            };
+            fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, Looper.myLooper());
+          }
+        }
+      });
+    } else {
+      startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+              .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+  }
+
 
   protected abstract void processImage();
 

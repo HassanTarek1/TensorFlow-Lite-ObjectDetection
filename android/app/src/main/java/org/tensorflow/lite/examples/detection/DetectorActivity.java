@@ -26,6 +26,7 @@ import android.graphics.Paint;
 import android.graphics.Paint.Style;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.location.Location;
 import android.media.ImageReader.OnImageAvailableListener;
 import android.os.SystemClock;
 import android.util.Log;
@@ -33,12 +34,15 @@ import android.util.Size;
 import android.util.TypedValue;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.jetbrains.annotations.NotNull;
 import org.tensorflow.lite.examples.detection.customview.OverlayView;
 import org.tensorflow.lite.examples.detection.customview.OverlayView.DrawCallback;
 import org.tensorflow.lite.examples.detection.env.BorderedText;
@@ -87,6 +91,11 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
     private MultiBoxTracker tracker;
 
     private BorderedText borderedText;
+
+    private ArrayList<String> types;
+    private ArrayList<String> latitudes;
+    private ArrayList<String> longitudes;
+
 
     @Override
     public void onPreviewSizeChosen(final Size size, final int rotation) {
@@ -220,6 +229,11 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
 
                                 result.setLocation(location);
                                 mappedRecognitions.add(result);
+                                types.add(result.getTitle());
+                                DetectorActivity.super.getCurrentLocation();
+
+                                latitudes.add(getLatitude()+"");
+                                longitudes.add(getLongitude()+"");
                             }
                         }
 
@@ -260,6 +274,11 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
         return DESIRED_PREVIEW_SIZE;
     }
 
+    @Override
+    public void onLocationChanged(@NonNull @NotNull Location location) {
+
+    }
+
     // Which detection model to use: by default uses Tensorflow Object Detection API frozen
     // checkpoints.
     private enum DetectorMode {
@@ -274,5 +293,13 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
     @Override
     protected void setNumThreads(final int numThreads) {
         runInBackground(() -> detector.setNumThreads(numThreads));
+    }
+
+    @Override
+    public synchronized void onPause() {
+        super.onPause();
+        DataHolder.getInstance().setLatitudes(latitudes);
+        DataHolder.getInstance().setLongitudes(longitudes);
+        DataHolder.getInstance().setTypes(types);
     }
 }
