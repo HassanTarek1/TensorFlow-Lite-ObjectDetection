@@ -92,9 +92,9 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
 
     private BorderedText borderedText;
 
-    private ArrayList<String> types;
-    private ArrayList<String> latitudes;
-    private ArrayList<String> longitudes;
+    private ArrayList<String> types = new ArrayList<String>();
+    private ArrayList<String> latitudes = new ArrayList<String>();
+    private ArrayList<String> longitudes = new ArrayList<String>();
 
 
     @Override

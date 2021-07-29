@@ -42,6 +42,7 @@ import com.google.android.gms.maps.model.Dot;
 import com.google.android.gms.maps.model.Gap;
 import com.google.android.gms.maps.model.JointType;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PatternItem;
 import com.google.android.gms.maps.model.Polygon;
@@ -198,27 +199,35 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         int i = 0;
         for (String type: types){
 
-            if (type.equals("Lane") && i<prevIndex+4){
-                LatLng latLng = new LatLng(Double.parseDouble(latitudes.get(i)),Double.parseDouble(longitudes.get(i)));
-                polylineOptions.add(latLng);
-                prevIndex = types.indexOf(type);
-            }else {
-                if (type.equals("PotHole")){
-                    CircleOptions circleOptions = new CircleOptions()
-                            .center(new LatLng(Double.parseDouble(latitudes.get(i)),Double.parseDouble(longitudes.get(i))))
-                            .radius(0.5); // In meters
+            switch (type){
+                case "Lane":
+                    if (i<prevIndex+4){
+                        LatLng latLng = new LatLng(Double.parseDouble(latitudes.get(i)),Double.parseDouble(longitudes.get(i)));
+                        polylineOptions.add(latLng);
+                        prevIndex = types.indexOf(type);
+                    }
+                    break;
+                case "PotHole": CircleOptions circleOptions = new CircleOptions()
+                        .center(new LatLng(Double.parseDouble(latitudes.get(i)),Double.parseDouble(longitudes.get(i))))
+                        .radius(0.5); // In meters
 
                     Circle circle = mMap.addCircle(circleOptions);
+                    break;
+                case "Person":
+                    LatLng personLocation = new LatLng(Double.parseDouble(latitudes.get(i)),Double.parseDouble(longitudes.get(i)));
+                    Marker person = mMap.addMarker(
+                            new MarkerOptions()
+                                    .position(personLocation)
+                                    .title("person")
+                                    .icon(BitmapDescriptorFactory.fromResource(R.drawable.person)));
+                    break;
 
-                }
-                else{
-
-                }
-                Polyline polyline = mMap.addPolyline(polylineOptions);
-                polyline.setTag("B");
-                stylePolyline(polyline);
-                polylineOptions = new PolylineOptions().clickable(true);
             }
+
+            Polyline polyline = mMap.addPolyline(polylineOptions);
+            polyline.setTag("B");
+            stylePolyline(polyline);
+            polylineOptions = new PolylineOptions().clickable(true);
             i++;
         }
     }
