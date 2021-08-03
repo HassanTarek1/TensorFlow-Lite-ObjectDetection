@@ -14,13 +14,19 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.VectorDrawable;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.nfc.Tag;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
+import android.view.View;
 import android.widget.Toast;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -53,13 +59,19 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
 import org.tensorflow.lite.examples.detection.databinding.ActivityMapsBinding;
+import org.tensorflow.lite.examples.detection.env.Utils;
 
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnPolylineClickListener,
-        GoogleMap.OnPolygonClickListener{
+        GoogleMap.OnPolygonClickListener, GoogleMap.OnMarkerClickListener{
 
     private GoogleMap mMap;
     private ActivityMapsBinding binding;
@@ -68,9 +80,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private double longitude;
     private BroadcastReceiver mReceiver;
     private ArrayList<String> objects;
-    private ArrayList<String> latitudes;
-    private ArrayList<String> longitudes;
-    private ArrayList<String> types;
+    private ArrayList<String> latitudes = new ArrayList<>();
+    private ArrayList<String> longitudes = new ArrayList<>();
+    private ArrayList<String> types = new ArrayList<>();
+    private Handler myhandler = new Handler();
 
     private static final int COLOR_WHITE_ARGB = 0xffffffff;
     private static final int COLOR_GREEN_ARGB = 0xff388E3C;
@@ -119,24 +132,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         current = new LatLng(latitude,longitude);
         objects = new ArrayList<String>();
 
-        LocalBroadcastManager.getInstance(this).registerReceiver(mReceiver, new IntentFilter("Flags"));
-        mReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                Bundle bundle = intent.getExtras();
-
-                int i=0;
-                if (bundle!=null){
-                    for (String key : bundle.keySet()){
-                        objects.add(intent.getStringExtra("object "+i));
-                        i++;
-                    }
-                }
-
-
-            }
-        };
-
         binding = ActivityMapsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
@@ -145,7 +140,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-
+        myRunnable runnable = new myRunnable();
+        new Thread(runnable).start();
 
 
     }
@@ -162,14 +158,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-
-
-        // Add a marker in Sydney and move the camera
-        mMap.addMarker(new MarkerOptions().position(current).title("Marker in current location")
-        .icon(bitmapDescriptorFromVector(getApplicationContext(), R.drawable.ic_baseline_flag_24)));
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(current,16));
-        addCustomMarker();
+
         //mMap.setMinZoomPreference(6);
+
+    }
+    public void startThread (View view){
 
     }
 
@@ -185,51 +179,35 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         return BitmapDescriptorFactory.fromBitmap(bitmap);
     }
 
-    public void addCustomMarker(){
-        for (String object : objects){
-            mMap.addMarker(new MarkerOptions().position(current).title(object)
-                    .icon(bitmapDescriptorFromVector(getApplicationContext(), R.drawable.ic_baseline_flag_24)));
 
+
+
+    @Override
+    public void onPolylineClick(Polyline polyline) {
+        // Flip from solid stroke to dotted stroke pattern.
+        if ((polyline.getPattern() == null) || (!polyline.getPattern().contains(DOT))) {
+            polyline.setPattern(PATTERN_POLYLINE_DOTTED);
+        } else {
+            // The default pattern is a solid stroke.
+            polyline.setPattern(null);
         }
-        types = DataHolder.getInstance().getTypes();
-        latitudes = DataHolder.getInstance().getLatitudes();
-        longitudes = DataHolder.getInstance().getLongitudes();
-        PolylineOptions polylineOptions = new PolylineOptions().clickable(true);
-        int prevIndex = 0;
-        int i = 0;
-        for (String type: types){
 
-            switch (type){
-                case "Lane":
-                    if (i<prevIndex+4){
-                        LatLng latLng = new LatLng(Double.parseDouble(latitudes.get(i)),Double.parseDouble(longitudes.get(i)));
-                        polylineOptions.add(latLng);
-                        prevIndex = types.indexOf(type);
-                    }
-                    break;
-                case "PotHole": CircleOptions circleOptions = new CircleOptions()
-                        .center(new LatLng(Double.parseDouble(latitudes.get(i)),Double.parseDouble(longitudes.get(i))))
-                        .radius(0.5); // In meters
+        Toast.makeText(this, "Route type " + polyline.getTag().toString(),
+                Toast.LENGTH_SHORT).show();
+    }
 
-                    Circle circle = mMap.addCircle(circleOptions);
-                    break;
-                case "Person":
-                    LatLng personLocation = new LatLng(Double.parseDouble(latitudes.get(i)),Double.parseDouble(longitudes.get(i)));
-                    Marker person = mMap.addMarker(
-                            new MarkerOptions()
-                                    .position(personLocation)
-                                    .title("person")
-                                    .icon(BitmapDescriptorFactory.fromResource(R.drawable.person)));
-                    break;
+    @Override
+    public void onPolygonClick(Polygon polygon) {
 
-            }
+    }
 
-            Polyline polyline = mMap.addPolyline(polylineOptions);
-            polyline.setTag("B");
-            stylePolyline(polyline);
-            polylineOptions = new PolylineOptions().clickable(true);
-            i++;
-        }
+    @Override
+    public boolean onMarkerClick(Marker marker) {
+
+        // Return false to indicate that we have not consumed the event and that we wish
+        // for the default behavior to occur (which is for the camera to move such that the
+        // marker is centered and for the marker's info window to open, if it has one).
+        return false;
     }
     private void stylePolyline(Polyline polyline) {
         String type = "";
@@ -254,27 +232,257 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         polyline.setEndCap(new RoundCap());
         polyline.setWidth(POLYLINE_STROKE_WIDTH_PX);
-        polyline.setColor(COLOR_BLACK_ARGB);
+        polyline.setColor(getApplicationContext().getResources().getColor(R.color.BLUE));
         polyline.setJointType(JointType.ROUND);
     }
 
+    class myRunnable implements Runnable{
+        private ArrayList<Double> customLat = new ArrayList<Double>();
+        private ArrayList<Double> customLong = new ArrayList<Double>();
 
-    @Override
-    public void onPolylineClick(Polyline polyline) {
-        // Flip from solid stroke to dotted stroke pattern.
-        if ((polyline.getPattern() == null) || (!polyline.getPattern().contains(DOT))) {
-            polyline.setPattern(PATTERN_POLYLINE_DOTTED);
-        } else {
-            // The default pattern is a solid stroke.
-            polyline.setPattern(null);
+        @Override
+        public void run() {
+           myhandler.post(new Runnable() {
+               private static final String TAG = "thread";
+
+               @Override
+               public void run() {
+                   for (int i =0 ; i<10 ; i++){
+                       Log.d(TAG, "Started" + i);
+                   }
+                   addCustomMarker();
+               }
+           });
+
+        }
+        public void addCustomMarker(){
+            String filePath = Environment.getExternalStorageDirectory()+ "/object_detections.txt";
+            String all = "";
+            PolylineOptions polylineOptions = new PolylineOptions().clickable(true).color(getApplicationContext().getResources().getColor(R.color.BLUE));
+            int prevIndex = 0;
+            int i = 0;
+            int numPeople = 1;
+            double prevLat = 0;
+            double prevLong = 0 ;
+            String prevtype = "";
+
+            try {
+                BufferedReader br = new BufferedReader(new FileReader(filePath));
+                String strLine;
+                LatLng prevLane = null;
+                while ((strLine = br.readLine()) != null){
+                    String[] object = strLine.split(" ");
+                    String type = object[0];
+                    String latitude = object[1];
+                    String longitude = object[2];
+                    latitudes.add(latitude);
+                    longitudes.add(longitude);
+                    types.add(type);
+                    LatLng latLng = new LatLng(Double.parseDouble(latitude),Double.parseDouble(longitude));
+                    switch (type){
+                        case "Lane":
+                            if (markerExist(prevLat,prevLong)) {
+                                Random random = new Random();
+                                double temp1 = random.nextDouble();
+                                temp1 = temp1 * 0.0001;
+                                double temp2 = random.nextDouble();
+                                temp2 = temp2 * 0.0001;
+                                double newLat = Double.parseDouble(latitude) + temp1;
+                                double newLon = Double.parseDouble(longitude) + temp2;
+                                while (true) {
+                                    if (markerExist(newLat, newLon)) {
+                                        temp1 = random.nextDouble();
+                                        temp1 = temp1 * 0.0001;
+                                        temp2 = random.nextDouble();
+                                        temp2 = temp2 * 0.0001;
+                                        newLat = Double.parseDouble(latitude) + temp1;
+                                        newLon = Double.parseDouble(longitude) + temp2;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                if (prevLane!=null){
+                                    double distance = distance(prevLane.latitude,prevLane.longitude,newLat,newLon,'K');
+                                    if (distance<.8){
+                                        polylineOptions.add(new LatLng(newLat,newLon));
+                                        prevLat=newLat;
+                                        prevLong=newLon;
+                                        prevLane=new LatLng(newLat,newLon);
+                                    }else{
+                                        Polyline polyline = mMap.addPolyline(polylineOptions);
+                                        polyline.setTag("B");
+                                        stylePolyline(polyline);
+                                        polylineOptions = new PolylineOptions().clickable(true);
+                                        polylineOptions.add(new LatLng(newLat,newLon));
+                                        prevLat=newLat;
+                                        prevLong=newLon;
+                                        prevLane=new LatLng(newLat,newLon);
+                                    }
+                                }else
+                                {
+                                    polylineOptions.add(new LatLng(newLat,newLon));
+                                    prevLat=newLat;
+                                    prevLong=newLon;
+                                    prevLane=new LatLng(newLat,newLon);
+                                }
+                            }else{
+                                if (prevLane!=null){
+                                    double distance = distance(prevLane.latitude,prevLane.longitude,latLng.latitude,latLng.longitude,'K');
+                                    if (distance<.8){
+                                        polylineOptions.add(latLng);
+                                        prevLat=Double.parseDouble(latitude);
+                                        prevLong=Double.parseDouble(longitude);
+                                        prevLane=latLng;
+                                    }else{
+                                        Polyline polyline = mMap.addPolyline(polylineOptions);
+                                        polyline.setTag("B");
+                                        stylePolyline(polyline);
+                                        polylineOptions = new PolylineOptions().clickable(true);
+                                        polylineOptions.add(latLng);
+                                        prevLat=Double.parseDouble(latitude);
+                                        prevLong=Double.parseDouble(longitude);
+                                        prevLane=latLng;
+                                    }
+                                }else {
+                                    polylineOptions.add(latLng);
+                                    prevLat=Double.parseDouble(latitude);
+                                    prevLong=Double.parseDouble(longitude);
+                                    prevLane=latLng;
+                                }
+                            }
+
+                            break;
+                        case "PotHole":
+                            if (markerExist(prevLat,prevLong)){
+                                Random random = new Random();
+                                double temp1 = random.nextDouble();
+                                temp1 = temp1*0.0001;
+                                double temp2 = random.nextDouble();
+                                temp2 = temp2*0.0001;
+                                double newLat = Double.parseDouble(latitude)+temp1;
+                                double newLon = Double.parseDouble(longitude)+temp2;
+                                while(true){
+                                    if (markerExist(newLat,newLon)) {
+                                        temp1 = random.nextDouble();
+                                        temp1 = temp1 * 0.0001;
+                                        temp2 = random.nextDouble();
+                                        temp2 = temp2 * 0.0001;
+                                        newLat = Double.parseDouble(latitude) + temp1;
+                                        newLon = Double.parseDouble(longitude) + temp2;
+                                    }else{
+                                        break;
+                                    }
+                                }
+                                CircleOptions circleOptions = new CircleOptions()
+                                        .center(new LatLng(newLat,newLon))
+                                        .radius(2); // In meters
+                                Circle circle = mMap.addCircle(circleOptions);
+                                prevLat = newLat;
+                                prevLong=newLon;
+                            }else{
+
+                                CircleOptions circleOptions = new CircleOptions()
+                                        .center(latLng)
+                                        .radius(2); // In meters
+                                Circle circle = mMap.addCircle(circleOptions);
+                                prevLat=Double.parseDouble(latitude);
+                                prevLong=Double.parseDouble(longitude);
+                            }
+
+                            break;
+                        case "Person":
+                            if (markerExist(prevLat,prevLong)){
+                                Random random = new Random();
+                                double temp1 = random.nextDouble();
+                                temp1 = temp1*0.0001;
+                                double temp2 = random.nextDouble();
+                                temp2 = temp2*0.0001;
+                                double newLat = Double.parseDouble(latitude)+temp1;
+                                double newLon = Double.parseDouble(longitude)+temp2;
+                                while(true){
+                                    if (markerExist(newLat,newLon)) {
+                                        temp1 = random.nextDouble();
+                                        temp1 = temp1 * 0.0001;
+                                        temp2 = random.nextDouble();
+                                        temp2 = temp2 * 0.0001;
+                                        newLat = Double.parseDouble(latitude) + temp1;
+                                        newLon = Double.parseDouble(longitude) + temp2;
+                                    }else{
+                                        break;
+                                    }
+
+                                }
+                                Marker person = mMap.addMarker(
+                                        new MarkerOptions()
+                                                .position(new LatLng(newLat,newLon))
+                                                .title("person")
+                                                .icon(BitmapDescriptorFactory.fromResource(R.drawable.person)));
+                                customLat.add(newLat);
+                                customLong.add(newLon);
+                                prevLat = newLat;
+                                prevLong=newLon;
+                            }else{
+                               Marker person = mMap.addMarker(
+                                        new MarkerOptions()
+                                                .position(latLng)
+                                                .title("person")
+                                                .icon(BitmapDescriptorFactory.fromResource(R.drawable.person)));
+                                prevLat=Double.parseDouble(latitude);
+                                prevLong=Double.parseDouble(longitude);
+                                customLat.add(Double.parseDouble(latitude));
+                                customLong.add(Double.parseDouble(longitude));
+
+                            }
+
+
+                            break;
+                    }
+                    i++;
+                }
+                Polyline polyline = mMap.addPolyline(polylineOptions);
+                polyline.setTag("B");
+                stylePolyline(polyline);
+                Log.d(Utils.TAG, all);
+            } catch (IOException e) {
+                Log.e("notes_err", e.getLocalizedMessage());
+            }
         }
 
-        Toast.makeText(this, "Route type " + polyline.getTag().toString(),
-                Toast.LENGTH_SHORT).show();
+        public boolean markerExist(Double lat, Double lon){
+            if (customLat.contains(lat) && customLong.contains(lon))
+                return true;
+            return false;
+        }
+        private  double distance(double lat1, double lon1, double lat2, double lon2, char unit) {
+            double theta = lon1 - lon2;
+            double dist = Math.sin(deg2rad(lat1)) * Math.sin(deg2rad(lat2)) + Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.cos(deg2rad(theta));
+            dist = Math.acos(dist);
+            dist = rad2deg(dist);
+            dist = dist * 60 * 1.1515;
+            if (unit == 'K') {
+                dist = dist * 1.609344;
+            } else if (unit == 'N') {
+                dist = dist * 0.8684;
+            }
+            return (dist);
+        }
+
+        /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+        /*::  This function converts decimal degrees to radians             :*/
+        /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+        private  double deg2rad(double deg) {
+            return (deg * Math.PI / 180.0);
+        }
+
+        /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+        /*::  This function converts radians to decimal degrees             :*/
+        /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+        private  double rad2deg(double rad) {
+            return (rad * 180.0 / Math.PI);
+        }
+
+
     }
 
-    @Override
-    public void onPolygonClick(Polygon polygon) {
-
-    }
 }
+

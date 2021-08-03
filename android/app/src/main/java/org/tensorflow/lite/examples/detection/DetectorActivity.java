@@ -191,7 +191,22 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
         if (SAVE_PREVIEW_BITMAP) {
             ImageUtils.saveBitmap(croppedBitmap);
         }
+        double latitude = 0;
+        double longitude = 0;
+        if (!isLocationServiceRunning()){
+            Intent intent = new Intent(getApplicationContext(), LocationService.class);
+            intent.setAction(Constants.ACTION_START_LOCATION_SERVICE);
+            startService(intent);
+            latitude = LocationService.latitude;
+            longitude = LocationService.longitude;
+            Toast.makeText(this, "Location service started", Toast.LENGTH_SHORT).show();
+        }else{
+            latitude = LocationService.latitude;
+            longitude = LocationService.longitude;
+        }
 
+        double finalLatitude = latitude;
+        double finalLongitude = longitude;
         runInBackground(
                 new Runnable() {
                     @Override
@@ -224,16 +239,16 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
                             final RectF location = result.getLocation();
                             if (location != null && result.getConfidence() >= minimumConfidence) {
                                 canvas.drawRect(location, paint);
-
                                 cropToFrameTransform.mapRect(location);
-
                                 result.setLocation(location);
                                 mappedRecognitions.add(result);
-                                types.add(result.getTitle());
-                                DetectorActivity.super.getCurrentLocation();
+                                String object = result.getTitle()+" "+ finalLatitude +" "+ finalLongitude;
+                                try {
+                                    DetectorActivity.super.writeToFile(object);
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                }
 
-                                latitudes.add(getLatitude()+"");
-                                longitudes.add(getLongitude()+"");
                             }
                         }
 

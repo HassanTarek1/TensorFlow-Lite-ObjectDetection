@@ -17,6 +17,9 @@
 package org.tensorflow.lite.examples.detection;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.Intent;
@@ -34,6 +37,7 @@ import android.media.ImageReader;
 import android.media.ImageReader.OnImageAvailableListener;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -65,6 +69,13 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
 
 import org.jetbrains.annotations.NotNull;
@@ -126,10 +137,11 @@ public abstract class CameraActivity extends AppCompatActivity
       requestPermission();
     }
 
+
     fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
     if (ActivityCompat.checkSelfPermission(CameraActivity.this, Manifest.permission.ACCESS_FINE_LOCATION)== PackageManager.PERMISSION_GRANTED
             && ActivityCompat.checkSelfPermission(CameraActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED){
-      getCurrentLocation();
+      startLocationService();
 
     }else {
       ActivityCompat.requestPermissions(CameraActivity.this,
@@ -203,6 +215,8 @@ public abstract class CameraActivity extends AppCompatActivity
 
     plusImageView.setOnClickListener(this);
     minusImageView.setOnClickListener(this);
+
+
   }
 
   protected int[] getRgbBytes() {
@@ -370,6 +384,7 @@ public abstract class CameraActivity extends AppCompatActivity
   @Override
   public synchronized void onStop() {
     LOGGER.d("onStop " + this);
+    stopLocationService();
     super.onStop();
   }
 
@@ -398,7 +413,7 @@ public abstract class CameraActivity extends AppCompatActivity
       }
     }
     if ( requestCode== 100 && grantResults.length>0 && (grantResults[0]+grantResults[1] == PackageManager.PERMISSION_GRANTED)) {
-      getCurrentLocation();
+      startLocationService();
     }else{
       Toast.makeText(getApplicationContext(), "Permission denied",Toast.LENGTH_SHORT).show();
     }
@@ -599,9 +614,7 @@ public abstract class CameraActivity extends AppCompatActivity
 
           } else {
             LocationRequest locationRequest = new LocationRequest().setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
-                    .setInterval(10000)
-                    .setFastestInterval(1000)
-                    .setNumUpdates(1);
+                    .setInterval(500);
 
             LocationCallback locationCallback = new LocationCallback() {
               @Override
@@ -620,7 +633,50 @@ public abstract class CameraActivity extends AppCompatActivity
               .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
   }
+  public void writeToFile(String content) throws IOException {
+    File myfile = new File(Environment.getExternalStorageDirectory(),"object_detections.txt");
+    myfile.createNewFile();
+    FileOutputStream fileOutputStream = new FileOutputStream(myfile,true);
+    OutputStreamWriter outputStreamWriter = new OutputStreamWriter(fileOutputStream);
+    outputStreamWriter.write(content+"\n");
+    outputStreamWriter.flush();
+    outputStreamWriter.close();
+  }
+  public boolean isLocationServiceRunning(){
+    android.app.ActivityManager activityManager =
+            (android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+    if (activityManager != null){
+      for (ActivityManager.RunningServiceInfo service : activityManager.getRunningServices(Integer.MAX_VALUE)){
+        if (LocationService.class.getName().equals(service.service.getClassName())){
+          if (service.foreground){
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+    return false;
+  }
 
+  private void startLocationService(){
+    if (!isLocationServiceRunning()){
+      Intent intent = new Intent(getApplicationContext(), LocationService.class);
+      intent.setAction(Constants.ACTION_START_LOCATION_SERVICE);
+      startService(intent);
+      this.latitude = LocationService.latitude;
+      this.longitude = LocationService.longitude;
+      Toast.makeText(this, "Location service started", Toast.LENGTH_SHORT).show();
+    }
+  }
+
+  private void stopLocationService(){
+    if (isLocationServiceRunning()){
+      Intent intent = new Intent(getApplicationContext(), LocationService.class);
+      intent.setAction(Constants.ACTION_STOP_LOCATION_SERVICE);
+      startService(intent);
+      Toast.makeText(this, "Location service stopped", Toast.LENGTH_SHORT).show();
+    }
+  }
 
   protected abstract void processImage();
 

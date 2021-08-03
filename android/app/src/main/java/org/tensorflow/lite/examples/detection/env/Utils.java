@@ -23,6 +23,8 @@ import java.nio.channels.FileChannel;
 
 public class Utils {
 
+    public static final String TAG = "file";
+
     /**
      * Memory-map the model file in Assets.
      */
