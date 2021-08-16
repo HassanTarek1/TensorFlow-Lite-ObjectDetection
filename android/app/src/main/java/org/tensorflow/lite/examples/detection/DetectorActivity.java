@@ -242,12 +242,25 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
                                 cropToFrameTransform.mapRect(location);
                                 result.setLocation(location);
                                 mappedRecognitions.add(result);
-                                String object = result.getTitle()+" "+ finalLatitude +" "+ finalLongitude;
-                                try {
-                                    DetectorActivity.super.writeToFile(object);
-                                } catch (IOException e) {
-                                    e.printStackTrace();
+                                String object  = "";
+                                if (result.getTitle().equals("Lane")){
+                                    float boxHeight = location.bottom-location.top;
+                                    float boxWidth = location.right-location.left;
+                                    if (location.left>=104 && location.right<=312 && boxHeight>boxWidth){
+                                        object = result.getTitle()+" "+ finalLatitude +" "+ finalLongitude;
+                                    }
                                 }
+                                else{
+                                    object = result.getTitle()+" "+ finalLatitude +" "+ finalLongitude;
+                                }
+                                if (!object.equals("")){
+                                    try {
+                                        DetectorActivity.super.writeToFile(object);
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                }
+
 
                             }
                         }
