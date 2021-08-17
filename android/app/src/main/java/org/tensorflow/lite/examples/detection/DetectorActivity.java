@@ -246,8 +246,9 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
                                 if (result.getTitle().equals("Lane")){
                                     float boxHeight = location.bottom-location.top;
                                     float boxWidth = location.right-location.left;
-                                    if (location.left>=104 && location.right<=312 && boxHeight>boxWidth){
+                                    if (location.left>=160 && location.right<=480 && boxHeight>boxWidth){
                                         object = result.getTitle()+" "+ finalLatitude +" "+ finalLongitude;
+                                        System.out.println(object);
                                     }
                                 }
                                 else{
